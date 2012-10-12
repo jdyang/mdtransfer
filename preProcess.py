@@ -15,19 +15,30 @@ class PreProcess():
     
     conn = None
     cur = None
+    spreaddb = None
+    spreadcur = None
     
     def __init__(self):
        self.conn = None
        self.cur = None
+       self.spreaddb = None
+       self.spreadcur = None
+       
        
     def connectToMysql(self):
         self.conn = pymysql.connect(host=Constant.mysqlHost, port=3306, user='mdwriter', passwd='mdwriter', 
                                db=Constant.dbName)
+        self.spreaddb = pymysql.connect(host=Constant.mysqlHost, port=3306, user='mdwriter', passwd='mdwriter', 
+                               db=Constant.pxSpreadDBName)
+        self.spreadcur = self.spreaddb.cursor()
         self.cur = self.conn.cursor()
     
     def close(self):
         self.cur.close()
         self.conn.close()
+        
+        self.spreadcur.close()
+        self.spreaddb.close()
         
     
     def calculateHistoryMaxV(self):
@@ -255,89 +266,104 @@ class PreProcess():
         
         # index 0 indicate the main contract
         contraList = ["", "", "", ""]
+        maxVList = [0, 0, 0, 0]
         ContraSet = set(("CannotBeOne",  ))
         mainContra = "CannotBeOne"
         for i in range(minID,  maxID + 1): 
             self.cur.execute("SELECT * FROM %s WHERE id = %s" % (tableName,  i))
             rec = self.cur.fetchone()
             contraList[0] = rec[2]
+            maxVList[0] = rec[3]
             contraList[1] = rec[5]
+            maxVList[1] = rec[6]
             contraList[2] = rec[8]
+            maxVList[2] = rec[9]
             contraList[3] = rec[11]
+            maxVList[3] = rec[12]
             if contraList[0] not in ContraSet:
                 ContraSet.add(contraList[0])
                 mainContra = contraList[0]
-            self.doTheSpreadJobWithMainContra(contraList,  mainContra, contra, rec[1])
-            
+            self.doTheSpreadJobWithMainContra(contraList,  maxVList,  mainContra, contra, rec[1])
+     
+
+
     #this function deal with oneday's market data
-    def doTheSpreadJobWithMainContra(self,  contraList, mainContra, contra, rawDate):
+    def doTheSpreadJobWithMainContra(self,  contraList, maxVList,  mainContra, contra, rawDate):
         """this function deal with oneday's market data"""
+        
         exchangeName = contra.split("_")[0].lower()
         date = str(rawDate)
         msg("begin process " + date + "'s data of " + mainContra + " minus " + str(contraList))
         #generate dif for main con and con
+        conIndex = 0
         for con in contraList:
             #do not in the main contract table
             if len(con) < 2:
+                conIndex = conIndex + 1
                 continue
             if con == mainContra:
+                conIndex = conIndex + 1
                 continue
-            tableName = exchangeName + "_pxspread_" + mainContra + "_" + con
+            tableName = exchangeName + "_pxspread_" + mainContra.lower() + "_" + con.lower()
 #            print tableName
             #to check if the spread table exists
-            self.cur.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE table_name='%s'"%tableName)
-            if None == self.cur.fetchone():
+            
+#            self.spreadcur.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE table_name='%s'"%tableName)
+#            if None == self.spreadcur.fetchone():
                 #create the spread table
-                self.cur.execute("CREATE TABLE `%s` (\
-                      `ID` INT(11) NOT NULL AUTO_INCREMENT,\
-                      `PxSpread` DOUBLE DEFAULT NULL,\
-                      `Date` DATE DEFAULT NULL,\
-                      `MainTm` DATETIME DEFAULT NULL, `MainEX` VARCHAR(10) DEFAULT NULL,\
-                                    `MainInsID` VARCHAR(10) NOT NULL,\
-                                    `MainPreStlPx` DOUBLE DEFAULT NULL,\
-                                    `MainPreClsPx` DOUBLE DEFAULT NULL,\
-                                    `MainPreOI` DOUBLE DEFAULT NULL,\
-                                    `MainPx` DOUBLE DEFAULT NULL,\
-                                  `MainOPx` DOUBLE DEFAULT NULL,\
-                                  `MainHPx` DOUBLE DEFAULT NULL,\
-                                  `MainLPx` DOUBLE DEFAULT NULL,\
-                                  `MainV` INT(11) DEFAULT NULL,\
-                                  `MainTov` DOUBLE DEFAULT NULL,\
-                                  `MainOI` DOUBLE DEFAULT NULL,\
-                                  `MainCPx` DOUBLE DEFAULT NULL,\
-                                  `MainSPx` DOUBLE DEFAULT NULL,\
-                                  `MainULPx` DOUBLE DEFAULT NULL,\
-                                  `MainLLPx` DOUBLE DEFAULT NULL,\
-                                  `MainBPx1` DOUBLE DEFAULT NULL,\
-                                  `MainBV1` INT(11) DEFAULT NULL,\
-                                  `MainAPx1` DOUBLE DEFAULT NULL,\
-                                  `MainAV1` INT(11) DEFAULT NULL,\
-                                  `MainSEQ` INT(11) DEFAULT NULL,\
-                                  `Tm` DATETIME DEFAULT NULL, \
-                                  `EX` VARCHAR(10) DEFAULT NULL,\
-                                  `InsID` VARCHAR(10) NOT NULL,\
-                                  `PreStlPx` DOUBLE DEFAULT NULL,\
-                                  `PreClsPx` DOUBLE DEFAULT NULL,\
-                                  `PreOI` DOUBLE DEFAULT NULL,\
-                                  `Px` DOUBLE DEFAULT NULL,\
-                                  `OPx` DOUBLE DEFAULT NULL,\
-                                  `HPx` DOUBLE DEFAULT NULL,\
-                                  `LPx` DOUBLE DEFAULT NULL,\
-                                  `V` INT(11) DEFAULT NULL,\
-                                  `Tov` DOUBLE DEFAULT NULL,\
-                                  `OI` DOUBLE DEFAULT NULL,\
-                                  `CPx` DOUBLE DEFAULT NULL,\
-                                  `SPx` DOUBLE DEFAULT NULL,\
-                                  `ULPx` DOUBLE DEFAULT NULL,\
-                                  `LLPx` DOUBLE DEFAULT NULL,\
-                                  `BPx1` DOUBLE DEFAULT NULL,\
-                                  `BV1` INT(11) DEFAULT NULL,\
-                                  `APx1` DOUBLE DEFAULT NULL,\
-                                  `AV1` INT(11) DEFAULT NULL,\
-                                  `SEQ` INT(11) DEFAULT NULL,\
-                                  PRIMARY KEY (`ID`)\
-                                ) ENGINE=MYISAM DEFAULT CHARSET=utf8\
-                                "%tableName)
+#                msg("the table %s do not exist will be created" % tableName)
+            self.spreadcur.execute("CREATE TABLE IF NOT EXISTS `%s` (\
+                  `ID` INT(11) NOT NULL AUTO_INCREMENT,\
+                  `PxSpread` DOUBLE DEFAULT NULL,\
+                  `SpreadTm` DATETIME DEFAULT NULL,\
+                  `Vper` double DEFAULT NULL,\
+                  `Date` DATE DEFAULT NULL,\
+                  `MainTm` DATETIME DEFAULT NULL, `MainEX` VARCHAR(10) DEFAULT NULL,\
+                                `MainInsID` VARCHAR(10) NOT NULL,\
+                                `MainPreStlPx` DOUBLE DEFAULT NULL,\
+                                `MainPreClsPx` DOUBLE DEFAULT NULL,\
+                                `MainPreOI` DOUBLE DEFAULT NULL,\
+                                `MainPx` DOUBLE DEFAULT NULL,\
+                              `MainOPx` DOUBLE DEFAULT NULL,\
+                              `MainHPx` DOUBLE DEFAULT NULL,\
+                              `MainLPx` DOUBLE DEFAULT NULL,\
+                              `MainV` INT(11) DEFAULT NULL,\
+                              `MainTov` DOUBLE DEFAULT NULL,\
+                              `MainOI` DOUBLE DEFAULT NULL,\
+                              `MainCPx` DOUBLE DEFAULT NULL,\
+                              `MainSPx` DOUBLE DEFAULT NULL,\
+                              `MainULPx` DOUBLE DEFAULT NULL,\
+                              `MainLLPx` DOUBLE DEFAULT NULL,\
+                              `MainBPx1` DOUBLE DEFAULT NULL,\
+                              `MainBV1` INT(11) DEFAULT NULL,\
+                              `MainAPx1` DOUBLE DEFAULT NULL,\
+                              `MainAV1` INT(11) DEFAULT NULL,\
+                              `MainSEQ` INT(11) DEFAULT NULL,\
+                              `Tm` DATETIME DEFAULT NULL, \
+                              `EX` VARCHAR(10) DEFAULT NULL,\
+                              `InsID` VARCHAR(10) NOT NULL,\
+                              `PreStlPx` DOUBLE DEFAULT NULL,\
+                              `PreClsPx` DOUBLE DEFAULT NULL,\
+                              `PreOI` DOUBLE DEFAULT NULL,\
+                              `Px` DOUBLE DEFAULT NULL,\
+                              `OPx` DOUBLE DEFAULT NULL,\
+                              `HPx` DOUBLE DEFAULT NULL,\
+                              `LPx` DOUBLE DEFAULT NULL,\
+                              `V` INT(11) DEFAULT NULL,\
+                              `Tov` DOUBLE DEFAULT NULL,\
+                              `OI` DOUBLE DEFAULT NULL,\
+                              `CPx` DOUBLE DEFAULT NULL,\
+                              `SPx` DOUBLE DEFAULT NULL,\
+                              `ULPx` DOUBLE DEFAULT NULL,\
+                              `LLPx` DOUBLE DEFAULT NULL,\
+                              `BPx1` DOUBLE DEFAULT NULL,\
+                              `BV1` INT(11) DEFAULT NULL,\
+                              `APx1` DOUBLE DEFAULT NULL,\
+                              `AV1` INT(11) DEFAULT NULL,\
+                              `SEQ` INT(11) DEFAULT NULL,\
+                              PRIMARY KEY (`ID`)\
+                            ) ENGINE=MYISAM DEFAULT CHARSET=utf8\
+                            "%tableName)
             
             #start process mainContra and con of the very date
             mainContraTableName = exchangeName+"_"+mainContra
@@ -349,8 +375,98 @@ class PreProcess():
             mainContraRec = self.cur.fetchall()
             self.cur.execute(selectSql%(conTableName, leftTm, rightTm))
             conRec = self.cur.fetchall()
+            lenMain = len(mainContraRec)
+            lenCon = len(conRec)
+#            print lenMain,  lenCon
+            pMain = 0; pCon = 0
+            
             #data ready ,then do the compare job
-    
+            
+            #find the first valid record (ignore the con's record if the time  < the first record of main's time)
+            while mainContraRec[pMain][17] > conRec[pCon][17]:
+                pCon = pCon + 1
+  
+            spreadTm = "'" + str(mainContraRec[pMain][17]) + "'"
+            #generate Px spread of every record and insert into table
+            while pMain < lenMain - 1 and pCon < lenCon - 1:
+                
+                pxSpread = mainContraRec[pMain][6] - conRec[pCon][6]
+                vPer = maxVList[conIndex]*1.0 / maxVList[0]
+
+                myValue = str(pxSpread) + ", " + spreadTm + ", " + str(vPer) + ", '" + date + "', '" + str(mainContraRec[pMain][17]) + "', " \
+                + str(mainContraRec[pMain][1:3])[1:-1] + ", " \
+                + str(mainContraRec[pMain][3:17])[1:-1].replace("L",  "") + ", "\
+                + str(mainContraRec[pMain][18:])[1:-1].replace("None",  "0").replace("L",  "") + ", '"\
+                + str(conRec[pCon][17]) + "', " \
+                + str(conRec[pCon][1:3])[1:-1] + ", " \
+                + str(conRec[pCon][3:17])[1:-1].replace("L",  "") + ", "\
+                + str(conRec[pCon][18:])[1:-1].replace("None",  "0").replace("L",  "") 
+                
+                insertSql = "INSERT INTO `" + tableName + "`" + str(Constant.pxSpreadTableStruct).replace("'", "`")+ \
+                " values (" + myValue + ")"
+                self.spreadcur.execute(insertSql)
+                
+                pMain = pMain + 1; pCon = pCon + 1
+                if mainContraRec[pMain][17] < conRec[pCon][17]:
+                    pCon = pCon - 1 
+                    spreadTm = "'" + str(mainContraRec[pMain][17]) + "'"
+                elif mainContraRec[pMain][17] > conRec[pCon][17]:
+                    pMain = pMain - 1
+                    spreadTm = "'" + str(conRec[pCon][17]) + "'"
+                elif mainContraRec[pMain][17] == conRec[pCon][17]:
+                    spreadTm = "'" + str(mainContraRec[pMain][17]) + "'"
+            
+            #deal with the remain main record
+            if pCon >= lenCon - 1:
+                while pMain < lenMain:
+                    pxSpread = mainContraRec[pMain][6] - conRec[pCon][6]
+                    vPer = maxVList[conIndex]*1.0 / maxVList[0]
+
+                    myValue = str(pxSpread) + ", " + spreadTm + ", " + str(vPer) + ", '" + date + "', '" + str(mainContraRec[pMain][17]) + "', " \
+                    + str(mainContraRec[pMain][1:3])[1:-1] + ", " \
+                    + str(mainContraRec[pMain][3:17])[1:-1].replace("L",  "") + ", "\
+                    + str(mainContraRec[pMain][18:])[1:-1].replace("None",  "0").replace("L",  "") + ", '"\
+                    + str(conRec[pCon][17]) + "', " \
+                    + str(conRec[pCon][1:3])[1:-1] + ", " \
+                    + str(conRec[pCon][3:17])[1:-1].replace("L",  "") + ", "\
+                    + str(conRec[pCon][18:])[1:-1].replace("None",  "0").replace("L",  "") 
+                    
+                    insertSql = "INSERT INTO `" + tableName + "`" + str(Constant.pxSpreadTableStruct).replace("'", "`")+ \
+                    " values (" + myValue + ")"
+                    self.spreadcur.execute(insertSql)
+                    
+                    pMain = pMain + 1
+                    if pMain >= lenMain:
+                        break
+                    spreadTm = "'" + str(mainContraRec[pMain][17]) + "'"
+            
+            #deal with the remain con record
+            elif pMain >= lenMain - 1:
+                while pCon < lenCon:
+                    pxSpread = mainContraRec[pMain][6] - conRec[pCon][6]
+                    vPer = maxVList[conIndex]*1.0 / maxVList[0]
+
+                    myValue = str(pxSpread) + ", " + spreadTm + ", " + str(vPer) + ", '" + date + "', '" + str(mainContraRec[pMain][17]) + "', " \
+                    + str(mainContraRec[pMain][1:3])[1:-1] + ", " \
+                    + str(mainContraRec[pMain][3:17])[1:-1].replace("L",  "") + ", "\
+                    + str(mainContraRec[pMain][18:])[1:-1].replace("None",  "0").replace("L",  "") + ", '"\
+                    + str(conRec[pCon][17]) + "', " \
+                    + str(conRec[pCon][1:3])[1:-1] + ", " \
+                    + str(conRec[pCon][3:17])[1:-1].replace("L",  "") + ", "\
+                    + str(conRec[pCon][18:])[1:-1].replace("None",  "0").replace("L",  "") 
+                    
+                    insertSql = "INSERT INTO `" + tableName + "`" + str(Constant.pxSpreadTableStruct).replace("'", "`")+ \
+                    " values (" + myValue + ")"
+                    self.spreadcur.execute(insertSql)
+                    
+                    pCon = pCon + 1
+                    if pCon >= lenCon:
+                        break
+                    spreadTm = "'" + str(conRec[pCon][17]) + "'"
+            
+        msg("finish processing " + date + "'s data of " + mainContra + " minus " + str(contraList))
+        
+        
 def msg(mess):
     print time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time())) + " " + mess
  
@@ -372,6 +488,8 @@ if __name__ == "__main__":
     for s in Constant.preContractIDForTest:
         msg("begin to generate Px spread")
         m.generateSpreadOfProduct(s)
+
+#    m.doTheSpreadJobWithMainContra(['IF1202', 'IF1203', '', ''], [1, 1, 1, 1],  'IF1202', 'cffe_if', '2012-01-30')
     
     m.close()
     msg("end of work")
