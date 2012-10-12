@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Project SYSTEM "Project-4.6.dtd">
 <!-- eric4 project file for project mdtransfer -->
-<!-- Saved: 2012-10-09, 11:11:35 -->
+<!-- Saved: 2012-10-10, 18:22:12 -->
 <!-- Copyright (C) 2012 jdyang, jdyangchina@gmail.com -->
 <Project version="4.6">
   <Language>en</Language>
@@ -13,6 +13,9 @@
   <Email>jdyangchina@gmail.com</Email>
   <Sources>
     <Source>__init__.py</Source>
+    <Source>test.py</Source>
+    <Source>preProcess.py</Source>
+    <Source>util.py</Source>
   </Sources>
   <Forms>
   </Forms>
