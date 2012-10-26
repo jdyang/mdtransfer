@@ -2,7 +2,7 @@
 
 import sys
 
-from util import Constant
+from util import Constant,  Switch
 
 import util
 
@@ -61,7 +61,7 @@ class PreProcess():
         #step 1, get valid tables
         #!be careful to choose the real task table instead of the testing one
         for contra in Constant.preContractID:
-            msg(" in calculateHistoryMaxVstart: dealing with the contract : " + contra)
+            msg(" in calculateHistoryMaxVstart: dealing with the contract : " + contra.lower())
             
             #step 0, create the daily_view table
             self.cur.execute("CREATE TABLE IF NOT EXISTS `%s` (\
@@ -90,9 +90,9 @@ class PreProcess():
                       `SEQ` int(11) DEFAULT NULL,\
                       PRIMARY KEY (`ID`),\
                       UNIQUE KEY `UniqueKey` (`ConstrID`,`Date`)\
-                    ) ENGINE=MyISAM DEFAULT CHARSET=utf8" % (contra+"_daily_view"))
+                    ) ENGINE=MyISAM DEFAULT CHARSET=utf8" % (contra.lower()+"_daily_view"))
             
-            tableNameLike = "%" + contra.lower() + "%"
+            tableNameLike = "%" + contra + "%"
             sqlCmd = "show tables like " + "'" + tableNameLike + "'"
 
             retNum = self.cur.execute(sqlCmd)
@@ -106,7 +106,7 @@ class PreProcess():
             for tmpT in tables:
                 tableName = tmpT[0]
                 msg('begin processing table : ' + tableName)
-                myDate = str(tableName).strip(contra.lower())
+                myDate = str(tableName).strip(contra)
                 
                 #to omit none-mdata tables
                 regex=u"^\d+$"
@@ -188,6 +188,10 @@ class PreProcess():
             msg("finish contract : " + contra)
         
     def dealWithTheDay(self,  leftParenthesis,  rightParenthesis, tableName,  contra):
+        '''get the maxV of the day(get the last record of the day)'''
+        
+        dbg("dealWithTheDay between %s, %s of table(%s) contra: %s"%(leftParenthesis,  rightParenthesis, tableName,  contra))
+        
         retNum = self.cur.execute("SELECT * FROM %s WHERE Tm BETWEEN \
         %s AND %s ORDER BY Tm DESC LIMIT 0,1"%(tableName, "'" + str(leftParenthesis) + "'",  "'" +str(rightParenthesis) + "'"))
         myResult = self.cur.fetchone()
@@ -197,6 +201,8 @@ class PreProcess():
         if myResult[10] == 0:
             return
             
+        dbg("find data~ begin to find the maxV of the date")
+        
         date1 =  "'" + str(myResult[17]) + "'"
         date2 =  "'" + str(myResult[17]).split(' ')[0] + "'"
         value0 = myResult[2]
@@ -240,6 +246,8 @@ class PreProcess():
         #! dbName hardCode here be careful
         insertSql = "INSERT INTO `mdata`.`" + targetTableName + "`" + str(Constant.mainContractTableStruct).replace("'", "`") + \
         " values (" + myValue + ")" + " ON DUPLICATE KEY UPDATE Date =" + strDate
+        
+        dbg("find the maxV into main_contracts table")
         
         #insert the daily statistics into main contract table
         self.cur.execute(insertSql)
@@ -320,7 +328,7 @@ class PreProcess():
         
 
     def generateSpreadOfProduct(self,  contra):
-        tableName = contra + "_main_contracts"
+        tableName = contra.lower() + "_main_contracts"
         #! date region should be user's input when this script used for daily build
         self.cur.execute("SELECT ID FROM %s WHERE id = (SELECT MAX(ID) FROM %s)" % (tableName,  tableName))
         try:
@@ -370,7 +378,7 @@ class PreProcess():
     def doTheSpreadJobWithMainContraWithSeq(self,  contraList, maxVList,  mainContra, contra, rawDate):
         """this function deal with oneday's market data in the sequence way"""
         
-        exchangeName = contra.split("_")[0].lower()
+        exchangeName = contra.split("_")[0]
         date = str(rawDate)
         msg("begin process " + date + "'s data of " + mainContra + " minus " + str(contraList)\
              + "in the seq way")
@@ -384,7 +392,7 @@ class PreProcess():
             if con == mainContra:
                 conIndex = conIndex + 1
                 continue
-            tableName = exchangeName + "_pxspread_" + mainContra.lower() + "_" + con.lower()
+            tableName = exchangeName.lower() + "_pxspread_" + mainContra.lower() + "_" + con.lower()
 #            print tableName
             #to check if the spread table exists
             
@@ -735,6 +743,9 @@ class PreProcess():
         '''
             to calculate the k-line from data of db(pxspread) to db(pxspreadstatistic)
         '''
+        
+        msg("calculate the k of table : " + tableName)
+        
         self.spreadcur.execute("SELECT Date FROM %s WHERE id = (SELECT MAX(ID) FROM %s)" % (tableName,  tableName))
         
         try:
@@ -758,7 +769,7 @@ class PreProcess():
         digitMaxYear = int(maxDateList[0])
         
         #debug
-        print tableName,  digitMinYear,  digitMaxYear,  minDateList,  digitMaxYear
+#        print tableName,  digitMinYear,  digitMaxYear,  minDateList,  digitMaxYear
         
         for year in range(digitMinYear,  digitMaxYear + 1):
             if (year == digitMinYear):
@@ -863,7 +874,7 @@ class PreProcess():
                 
             hisTime = date + " 00:00:00"    
             hisSql = "SELECT Tm, Px FROM %s WHERE tm < '%s' \
-            AND TYPE = %s ORDER BY Tm DESC LIMIT 0, 9"%(tableName,  hisTime,  Constant.dictSpreadSType['1min'])
+            AND TYPE = %s ORDER BY Tm DESC LIMIT 0, %s"%(tableName,  hisTime,  Constant.dictSpreadSType[typeStr],  str(Constant.MANum - 1))
             
             histNum = self.cur_s.execute(hisSql)
             hisRec = self.cur_s.fetchall()
@@ -871,15 +882,18 @@ class PreProcess():
             list(hisRec).reverse()
             globalList = hisRec + retRec
            
-            if len(globalList) < 10:
+            if len(globalList) < Constant.MANum:
                 msg("no valid ma10 data of date  %s typeStr:%s, table :%s: "%(date,  typeStr,  tableName))
+                updateSql = "UPDATE %s SET MA10 = NULL, BollUp = NULL, BollBo = NULL WHERE \
+             TYPE = %s"%(tableName, Constant.dictSpreadSType[typeStr])
+                self.cur_s.execute(updateSql)
                 continue
             
-            pxList = [0] * 10
-            for i in range(0,  10):
+            pxList = [0] * Constant.MANum
+            for i in range(0,  Constant.MANum):
                 pxList[i] = globalList[i][1]
             
-            pList = 10
+            pList = Constant.MANum - 1
             while pList < len(globalList):
                 
                 stdDif = util.stdDeviation(pxList)
@@ -887,11 +901,13 @@ class PreProcess():
                 
                 updateSql = "UPDATE %s SET MA10 = %s, BollUp = %s, BollBo = %s \
                 WHERE Tm = '%s' AND TYPE=%s"\
-                %(tableName, str(ma10), str(ma10 + 2 * stdDif),  str(ma10 - 2 * stdDif),  str(globalList[pList][0]),  Constant.dictSpreadSType[typeStr] )
+                %(tableName, str(ma10), str(ma10 + Constant.stdDeCount * stdDif),  str(ma10 - Constant.stdDeCount * stdDif),  str(globalList[pList][0]),  Constant.dictSpreadSType[typeStr] )
                 
                 self.cur_s.execute(updateSql)
                 
-                tmpList = pxList[1:] + [globalList[pList][1]]
+                if pList + 1 >= len(globalList):
+                    break;
+                tmpList = pxList[1:] + [globalList[pList + 1][1]]
                 pxList = tmpList
                 
                 pList = pList + 1
@@ -950,6 +966,18 @@ class PreProcess():
         #only concern with the minute level , the hour and daily level should traverse 15min records
         lists = [l1min,  l3min, l5min, l15min]
         pCurTm = "00:00"; pCurTm3m = "00:00"; pCurTm5m = "00:00"; pCurTm15m = "00:00";
+        
+        vPer = 1
+        
+        invalidFlag = True
+        contractName = tableName.split("_")[0] + "_" + tableName.split("_")[2][:2]
+        
+        #invalid data filter threshold
+        thresHold = Constant.normalThreshold
+            
+        if Constant.invalidDataRule.has_key(contractName):   
+            thresHold = Constant.invalidDataRule[contractName]
+        
         for rec in retRec:
             pxspread = rec[0]
           
@@ -957,10 +985,16 @@ class PreProcess():
         
             spreadTm = str(rec[1]).split()[1][:-3]
             
+            #invalid data filter
+            if invalidFlag and str(rec[1]).split()[1] < thresHold:
+                continue;
+            else:
+                invalidFlag = False
+            
             #1min
             #when reach the first record of a minute
             if pCurTm != spreadTm:
-                if l1min[0] != -65535 and l1min[6] > 0:
+                if l1min[0] != -65535 and l1min[6] > Constant.invalidNumCount:
                     myValue =  "'" + date + " " + pCurTm + ":00'"\
                     + ", " + str(rec[2]) + ", '" + date + "'"\
                     + ", " + str(l1min[2]) + ", " + str(l1min[3])\
@@ -974,6 +1008,7 @@ class PreProcess():
                     l1min[0] = pxspread; l1min[1] = pxspread; l1min[5] = 0; l1min[6] = 0;
                 elif l1min[0] == -65535:
                     l1min[2] = pxspread
+                    vPer = rec[2]
                 
                 pCurTm = spreadTm;
             
@@ -981,7 +1016,7 @@ class PreProcess():
             #3min
             #when reach the first record of 3 minute
             if pCurTm3m != spreadTm:
-                if l3min[2] != -65535  and minNum % 3 == 0 and l3min[6] > 0:
+                if l3min[2] != -65535  and minNum % 3 == 0 and l3min[6] > Constant.invalidNumCount:
                     myValue =  "'" + date + " " + pCurTm3m + ":00'"\
                     + ", " + str(rec[2]) + ", '" + date + "'"\
                     + ", " + str(l3min[2]) + ", " + str(l3min[3])\
@@ -1002,7 +1037,7 @@ class PreProcess():
             #5min
             #when reach the first record of 5 minute
             if pCurTm5m != spreadTm:
-                if l5min[2] != -65535  and minNum % 5 == 0 and l5min[6] > 0:
+                if l5min[2] != -65535  and minNum % 5 == 0 and l5min[6] > Constant.invalidNumCount:
                     myValue =  "'" + date + " " + pCurTm5m + ":00'"\
                     + ", " + str(rec[2]) + ", '" + date + "'"\
                     + ", " + str(l5min[2]) + ", " + str(l5min[3])\
@@ -1025,7 +1060,7 @@ class PreProcess():
             #15min
             #when reach the first record of 15 minute
             if pCurTm15m != spreadTm:
-                if l15min[2] != -65535  and minNum % 15 == 0 and l15min[6] > 0:
+                if l15min[2] != -65535  and minNum % 15 == 0 and l15min[6] > Constant.invalidNumCount:
                     myValue =  "'" + date + " " + pCurTm15m + ":00'"\
                     + ", " + str(rec[2]) + ", '" + date + "'"\
                     + ", " + str(l15min[2]) + ", " + str(l15min[3])\
@@ -1056,11 +1091,55 @@ class PreProcess():
                 tmpList[3] = pxspread
             
          
-         
+        #finish the last period data's statistics
+        if l1min[6] > 0:
+            myValue =  "'" + date + " " + pCurTm + ":00'"\
+                        + ", " + str(vPer) + ", '" + date + "'"\
+                        + ", " + str(l1min[2]) + ", " + str(l1min[3])\
+                        + ", " + str(l1min[5]*1.0/l1min[6]) + ", " + str(l1min[0]) + ", " + str(l1min[1])\
+                        + ", " + "1" + ", " + str(l1min[6])
+            insertSql = "INSERT INTO `%s` %s VALUES ( %s) on duplicate key update Cnt = %s;"\
+                        %(tableName + "_s",  str(Constant.pxSpreadSTableStruct).replace("'", "`"),  myValue,  str(l1min[6]))  
+    #                    print insertSql
+            self.cur_s.execute(insertSql)
+        
+        if l3min[6] > 0 : 
+            myValue =  "'" + date + " " + pCurTm3m + ":00'"\
+                + ", " + str(vPer) + ", '" + date + "'"\
+                + ", " + str(l3min[2]) + ", " + str(l3min[3])\
+                + ", " + str(l3min[5]*1.0/l3min[6]) + ", " + str(l3min[0]) + ", " + str(l3min[1])\
+                + ", " + "2" + ", " + str(l3min[6])
+            insertSql = "INSERT INTO `%s` %s VALUES ( %s) on duplicate key update Cnt = %s;"\
+                    %(tableName + "_s",  str(Constant.pxSpreadSTableStruct).replace("'", "`"),  myValue,  str(l3min[6])  )
+        
+            self.cur_s.execute(insertSql)
+        
+        if l5min[6] > 0:
+            myValue =  "'" + date + " " + pCurTm5m + ":00'"\
+                + ", " + str(vPer) + ", '" + date + "'"\
+                + ", " + str(l5min[2]) + ", " + str(l5min[3])\
+                + ", " + str(l5min[5]*1.0/l5min[6]) + ", " + str(l5min[0]) + ", " + str(l5min[1])\
+                + ", " + "3" + ", " + str(l5min[6])
+            insertSql = "INSERT INTO `%s` %s VALUES ( %s) on duplicate key update Cnt = %s;"\
+                %(tableName + "_s",  str(Constant.pxSpreadSTableStruct).replace("'", "`"),  myValue,  str(l5min[6])  )
+            
+            self.cur_s.execute(insertSql)
+        
+        if l15min[6] > 0:
+            myValue =  "'" + date + " " + pCurTm15m + ":00'"\
+                    + ", " + str(vPer) + ", '" + date + "'"\
+                    + ", " + str(l15min[2]) + ", " + str(l15min[3])\
+                    + ", " + str(l15min[5]*1.0/l15min[6]) + ", " + str(l15min[0]) + ", " + str(l15min[1])\
+                    + ", " + "4" + ", " + str(l15min[6])
+            insertSql = "INSERT INTO `%s` %s VALUES ( %s) on duplicate key update Cnt = %s;"\
+                    %(tableName + "_s",  str(Constant.pxSpreadSTableStruct).replace("'", "`"),  myValue,  str(l15min[6])  )
+                
+            self.cur_s.execute(insertSql)
+    
+        
   
         #next will deal with hour and daily level (type 5 and 6)
         #! be careful while dealing with the 1day k-line, different contract has his own rules processing the data
-        contractName = tableName.split("_")[0] + "_" + tableName.split("_")[2][:2]
 
         ruleList = Constant.normalList
         dayVper = 0
@@ -1075,7 +1154,7 @@ class PreProcess():
             recNum = self.cur_s.execute("SELECT * FROM %s WHERE TYPE = %s and Tm >= %s and Tm < %s"\
                                           %(realTableName,  Constant.dictSpreadSType["15min"],  sTime,  cTime) )
             rec15min = self.cur_s.fetchall()
-            if None == rec15min or recNum == 0:
+            if None == rec15min or recNum == 0 or len(rec15min) == 0:
                 continue
            
             l1hour[5] = 0; l1hour[6] = 0; l1hour[0] = rec15min[0][7]; l1hour[1] = rec15min[0][8]; 
@@ -1088,10 +1167,15 @@ class PreProcess():
                 l1hour[5] = l1hour[5]  + 1.0 * rec[10] * rec[6]
                 l1hour[6] = l1hour[6] + rec[10]
                 l1hour[3] = rec[5]
-                
-            dayVper = rec15min[0][2]
             
-            myValue =  sTime + ", " + str(rec15min[0][2]) + ", '" + date + "'"\
+#            print l1hour[6],  date
+            
+            dayVper = rec15min[0][2]
+            if (l1hour[6] == 0):
+                msg("WARNING no pxspread data between %s and %s in table %s"%(sTime,  cTime,  realTableName))
+                continue
+            else:
+                myValue =  sTime + ", " + str(rec15min[0][2]) + ", '" + date + "'"\
                     + ", " + str(l1hour[2]) + ", " + str(l1hour[3])\
                     + ", " + str(l1hour[5]*1.0/l1hour[6]) + ", " + str(l1hour[0]) + ", " + str(l1hour[1])\
                     + ", " + Constant.dictSpreadSType["1hour"] + ", " + str(l1hour[6])
@@ -1105,16 +1189,23 @@ class PreProcess():
                     l1day[0] = l1hour[0]
             if l1hour[1] <  l1day[1]:
                 l1day[1] = l1hour[1]
-            l1day[5] = l1day[5] + l1hour[5]*1.0/l1hour[6]
-            l1day[6] = l1day[6] + 1
+            l1day[5] = l1day[5] + l1hour[5]*1.0
+            l1day[6] = l1day[6] + l1hour[6]
             l1day[3] = l1hour[3]
             if l1day[2] == 65535:
                 l1day[2] = l1hour[2]
-            
-        myValue =  "'" + date  + " 18:00:00', " + str(dayVper) + ", '" + date + "'"\
+         
+#        print l1day[6] ,  l1day[5] 
+      
+        if (l1day[6] == 0):
+            msg("WARNING no pxspread data of the date %s in table %s"%(date,  realTableName))
+            return 
+        else:
+            myValue =  "'" + date  + " 18:00:00', " + str(dayVper) + ", '" + date + "'"\
                     + ", " + str(l1day[2]) + ", " + str(l1day[3])\
                     + ", " + str(l1day[5]*1.0/l1day[6]) + ", " + str(l1day[0]) + ", " + str(l1day[1])\
                     + ", " + Constant.dictSpreadSType["1day"] + ", " + str(l1day[6])
+                    
         insertSql = "INSERT INTO `%s` %s VALUES ( %s) on duplicate key update Cnt = %s;"\
                 %(tableName + "_s",  str(Constant.pxSpreadSTableStruct).replace("'", "`"),  myValue,  str(l1day[6])  )
     
@@ -1127,12 +1218,11 @@ class PreProcess():
         tables = self.spreadcur.fetchall()
         
         if tables == None or retNum == 0:
-            msg("no tables like %s "%tableNameLike)
+            msg("no tables like ")
             return 
         
         for t in tables:
             self.calculate_the_k_by_table(t[0])
-            self.calculate_10MA_by_table(t[0] + "_s")
             
     def traverse_db_pxspread_for_10MA(self):
         sqlCmd = "SHOW TABLES LIKE	'%pxspread%'"
@@ -1141,17 +1231,26 @@ class PreProcess():
         tables = self.cur_s.fetchall()
         
         if tables == None or retNum == 0:
-            msg("no tables like %s "%tableNameLike)
+            msg("no tables like")
             return 
-        
+        regex=u"^census_.*$"
         for t in tables:
+            if re.match(regex, t[0]) != None:
+                continue
             self.calculate_10MA_by_table(t[0])
+    
     
     def sayHello(self):
         print 'hello'
 
 def msg(mess):
     print time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time())) + " " + mess
+    sys.stdout.flush()
+    
+def dbg(mess):
+    if Switch.debug_on :
+        print time.strftime("%Y-%m-%d %H:%M:%S [debug]",time.localtime(time.time())) + " " + mess
+        sys.stdout.flush()
  
 if __name__ == "__main__":
    

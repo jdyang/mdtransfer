@@ -3,11 +3,12 @@ class Constant():
     preContractID = ("CFFE_IF", "SHFE_al",  "SHFE_au",  "SHFE_cu",  "SHFE_cu",  "SHFE_fu",  "SHFE_pb", 
                       "SHFE_rb", "SHFE_ru",  "SHFE_wr",  "SHFE_zn")
                       
-    preContractIDForTest = ("CFFE_IF", )
+#    preContractID = ("shfe_rb", )
                       
     likelyYears = (11,  12,  13)
     
-    mysqlHost = "localhost"
+    mysqlHost = "10.47.51.197"
+#    mysqlHost = "localhost"
     
     dbName = "mdata"
     
@@ -32,14 +33,38 @@ class Constant():
     #a dict for the type of pxspread statistics
     dictSpreadSType = {"1min":"1",  "3min":"2",  "5min":"3",  "15min":"4",  "1hour":"5",  "1day":"6"}
     
+    #a dict for the type of k-line trend
+    kLineTrendType = {"upToMid":"1",  "upToDown":"2",  "downToMid":"3",  "downToUp":"4"}
+    
     #different contract has different type of k-line generate rules, noramal futures will be treat as default process ruls
     ifList = {"09:15:00":"10:15:00",  "10:15:00":"11:15:00", "11:15:00":"13:45:00",  \
             "13:45:00":"14:45:00",  "14:45:00":"15:15:00"}
     normalList = {"09:00:00":"10:00:00",  "10:00:00":"11:00:00",  "11:00:00":"13:00:00", \
                    "13:00:00":"14:00:00",  "14:00:00":"15:00:00"}
     hourKLineRule = {"cffe_if":ifList}
+    
+    #rectify the last k-line period
+    ifRectify = ["11:30:00",  "15:15:00"]
+    normalRectify = ["10:15:00",  "11:30:00",  "15:00:00"]
+    rectifyRule = {"cffe_if":ifRectify}
+    
+    #invalid data filter rules
+    ifThreshold = "09:14:30"
+    normalThreshold = "08:59:30"
+    invalidDataRule = {"cffe_if":ifThreshold}
+    invalidNumCount = 2
+    
+    #standard_different
+    stdDeCount = 2
+    MANum = 26
+    
+    #trader cost 
+    tradeCost = {"cffe_if":0.8,  "shfe_ru":10,  "shfe_rb":2}
    
+class Switch():
+    '''switchs '''
   
+    debug_on = False
   
 
 def stdDeviation(a):
@@ -59,7 +84,7 @@ def MA_10(a):
         return a double if OK
     '''
     l = len(a)
-    if l != 10:
+    if l != Constant.MANum:
         return -65535
     ma = sum(a) * 1.0/l
     return ma

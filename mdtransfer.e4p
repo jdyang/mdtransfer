@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Project SYSTEM "Project-4.6.dtd">
 <!-- eric4 project file for project mdtransfer -->
-<!-- Saved: 2012-10-10, 18:22:12 -->
+<!-- Saved: 2012-10-19, 19:11:11 -->
 <!-- Copyright (C) 2012 jdyang, jdyangchina@gmail.com -->
 <Project version="4.6">
   <Language>en</Language>
@@ -16,6 +16,9 @@
     <Source>test.py</Source>
     <Source>preProcess.py</Source>
     <Source>util.py</Source>
+    <Source>historyDataPro.py</Source>
+    <Source>dailyDataPro.py</Source>
+    <Source>census.py</Source>
   </Sources>
   <Forms>
   </Forms>
