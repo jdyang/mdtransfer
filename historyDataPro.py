@@ -340,17 +340,20 @@ if __name__ == "__main__":
     #step 5 rectify the last k-line
 #    rectify_the_data(m)
 #    rectify_by_date(m,  "2012-03-15",  "cffe_pxspread_if1204_if1206_s")
+
+
+    #step 6 clean dirty data
+    data_clean(m)
     
-    #step 6 
+    #step 7 
     #calculate the 10ma data
-#    m.traverse_db_pxspread_for_10MA()
+    m.traverse_db_pxspread_for_10MA()
     
 
-    #step 7 clean dirty data
-#    data_clean(m)
+
 
     #step 8 add reverse data to boll & ma 
-#    add_reverse_data(m)
+    add_reverse_data(m)
 
     m.close()
     msg("end of work history data process")

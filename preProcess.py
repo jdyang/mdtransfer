@@ -218,6 +218,10 @@ class PreProcess():
         self.cur.execute(insertSql)
     
     def findTheMainContractOfDay(self,  contra, date):
+        '''
+            need to check  the contract reverse
+        '''
+        #TODO need to check  the contract reverse
         
         tableName = contra + "_daily_view"
         targetTableName = contra + "_main_contracts"
@@ -879,8 +883,12 @@ class PreProcess():
             histNum = self.cur_s.execute(hisSql)
             hisRec = self.cur_s.fetchall()
             
-            list(hisRec).reverse()
-            globalList = hisRec + retRec
+            reverseList = []
+            hisLen = len(hisRec)
+            for i in range(0,  hisLen):
+                reverseList.append(hisRec[hisLen - 1 -i])
+            
+            globalList = reverseList + list(retRec)
            
             if len(globalList) < Constant.MANum:
                 msg("no valid ma10 data of date  %s typeStr:%s, table :%s: "%(date,  typeStr,  tableName))

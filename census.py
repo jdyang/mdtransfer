@@ -289,8 +289,8 @@ def calculate_the_profit(m):
                 
 
 def draw_lines(m):
-    sqlStr = "SELECT Tm, Px, MA10, BollUp, BollBo from shfe_pxspread_rb1301_rb1305_s where type = 3 and Tm > '2012-10-11 00:00:00'  \
-    and Tm < '2012-10-12 23:59:59' and MA10 is not NULL order by Tm"
+    sqlStr = "SELECT Tm, Px, MA10, BollUp, BollBo FROM cffe_pxspread_if1211_if1212_s WHERE TYPE = 2 AND Tm > '2012-10-24 00:00:00'  \
+    AND Tm < '2012-10-24 23:59:59' AND MA10 IS NOT NULL ORDER BY Tm"
     m.cur_s.execute(sqlStr)
     
     rec = m.cur_s.fetchall()
@@ -331,7 +331,7 @@ if __name__ == "__main__":
 #    traverse_table_get_trend(m,  "cffe_pxspread_if1210_if1303_s")
   
 #    calculate_the_trend_avg(m)
-#
+##
 #    calculate_the_profit(m)
     
     draw_lines(m)

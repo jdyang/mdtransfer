@@ -319,10 +319,14 @@ def doTheDataJob(m):
     #step 5 rectify the last k-line
     rectify_the_data(m,  today)
 
+    #step 6 clean dirty data
+    msg("start step 6 clean dirty data")
+    data_clean(m,  today)
     
-    #step 6 
+    
+    #step 7 
     #calculate the 10ma data
-    msg("start step 6 calculate the 10ma data")
+    msg("start step 7 calculate the 10ma data")
     sqlCmd = "SHOW TABLES LIKE	'%pxspread%'"
     retNum = m.cur_s.execute(sqlCmd)
     tables = m.cur_s.fetchall()
@@ -338,9 +342,7 @@ def doTheDataJob(m):
         m.calculate_10MA_by_date(getToday(),  t[0])
     msg("finish step 6 calculate the 10ma data")   
         
-    #step 7 clean dirty data
-    msg("start step 7 clean dirty data")
-    data_clean(m,  today)
+    
 
     #step 8 add reverse data to boll & ma 
     msg("start step 8 add reverse data to boll & ma ")
@@ -358,12 +360,23 @@ if __name__ == "__main__":
     m = PreProcess()
     m.connectToMysql()
     
-    
+    td = ['2012-10-26', '2012-10-29', '2012-10-30']
+    yd = ['2012-10-25', '2012-10-28', '2012-10-29']
     #can define definedToday and definedYestoday to calculate andy date you want
-    definedToday = '2012-10-23'; definedYestoday = '2012-10-22'
-#    definedToday = defaultDate; definedYestoday = defaultDate
+    
+#    for i in range(0,  5):
+#        definedToday = td[i];definedYestoday = yd[i]
+#        doTheDataJob(m)
+#    definedToday = '2012-10-18'; definedYestoday = '2012-10-17'
+    definedToday = defaultDate; definedYestoday = defaultDate
     
 #    print getToday(),  getYestoday()
+
+
+#    msg("start step 7 calculate the 10ma data")
+#
+#    m.calculate_10MA_by_date(getToday(),  'shfe_pxspread_rb1305_rb1301_s')
+#    msg("finish step 6 calculate the 10ma data")   
     
     doTheDataJob(m)
 
